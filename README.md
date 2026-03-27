@@ -170,7 +170,7 @@ cs4135_week2/          # Parent repo
 
 ```bash
 # Clone with submodules
-git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_week2.git
+git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_BidHub.git
 
 # Or if already cloned without submodules
 git submodule update --init --recursive
