@@ -59,15 +59,15 @@ AuctionCtx -[#FF6600,bold]--> Broker : "**publishes:**\nAuctionCreated (carries 
 Broker -[#FF6600]--> PaymentCtx : "AuctionSold / BuyNowExecuted\n→ deduct wallet (PaymentDeducted)\n→ hold escrow (EscrowHeld)"
 Broker -[#FF6600]--> OrderCtx : "AuctionSold / BuyNowExecuted\n→ create Order (AWAITING_COLLECTION)"
 Broker -[#FF6600]--> NotifCtx : "BidPlaced → outbid alert\nAuctionSold → winner + seller\nAuctionEnded → seller notified"
-Broker -[#FF6600]--> CatalogueCtx : "AuctionCreated → index listing\nAuctionSold/Ended/Cancelled\n→ update listing status\n(Catalogue is a read projection)"
+Broker -[#FF6600]--> CatalogueCtx : "AuctionCreated → index listing\nAuctionSold/Ended/Cancelled\n→ update listing status\nAuctionCompleted → finalize listing\n(Catalogue is a read projection)"
 
 ' --- Admin publishes ---
-AdminCtx -[#9C27B0,bold]--> Broker : "**publishes:**\nListingRemovedByAdmin\nUserModerated\nCategoryCreated / CategoryDeleted\nReportSubmitted / ReportResolved"
+AdminCtx -[#9C27B0,bold]--> Broker : "**publishes:**\nListingRemovedByAdmin\nUserModerated\nCategoryCreated/Updated/Deleted\nReportSubmitted / ReportResolved"
 
 ' --- Admin event consumers ---
-Broker -[#9C27B0]--> AuctionCtx : "ListingRemovedByAdmin\n→ auction.markRemoved()\nCategoryCreated/Deleted\n→ update local CategoryRef cache"
+Broker -[#9C27B0]--> AuctionCtx : "ListingRemovedByAdmin\n→ auction.markRemoved()\nCategoryCreated/Updated/Deleted\n→ update local CategoryRef cache"
 Broker -[#9C27B0]--> AccountCtx : "UserModerated\n→ update user status"
-Broker -[#9C27B0]--> CatalogueCtx : "ListingRemovedByAdmin\n→ remove from index\nCategoryCreated/Deleted\n→ update category filters"
+Broker -[#9C27B0]--> CatalogueCtx : "ListingRemovedByAdmin\n→ remove from index\nCategoryCreated/Updated/Deleted\n→ update category filters"
 
 ' --- Payment publishes ---
 PaymentCtx -[#00897B,bold]--> Broker : "**publishes:**\nPaymentDeducted\nEscrowHeld\nEscrowReleased\nPaymentFailed"
@@ -91,7 +91,7 @@ DeliveryCtx -[#2E7D32,bold]--> Broker : "**publishes:**\nDeliveryJobCreated\nGoo
 ' --- Delivery event consumers ---
 Broker -[#2E7D32]--> PaymentCtx : "DeliveryConfirmed\n→ release escrow\nDeliveryDisputed\n→ escrow remains HELD"
 Broker -[#2E7D32]--> OrderCtx : "GoodsCollected → BEING_DELIVERED\nGoodsDelivered → DELIVERED\nDeliveryConfirmed → COMPLETED"
-Broker -[#2E7D32]--> NotifCtx : "GoodsCollected → notify seller\nGoodsDelivered → notify buyer\nDeliveryDisputed → notify admin"
+Broker -[#2E7D32]--> NotifCtx : "DeliveryJobCreated → notify seller\n  (driver assigned)\nGoodsCollected → notify seller\nGoodsDelivered → notify buyer\nDeliveryDisputed → notify admin"
 
 ' --- Account publishes ---
 AccountCtx -[#5D4037,bold]--> Broker : "**publishes:**\nUserRegistered\nUserStatusChanged"

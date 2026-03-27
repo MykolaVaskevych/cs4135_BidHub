@@ -129,8 +129,8 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
         __
         Local cache of valid categories.
         Consumed from Admin context's
-        CategoryCreated / CategoryDeleted
-        events.
+        CategoryCreated / CategoryUpdated
+        / CategoryDeleted events.
     }
 
     ' ============================================================
@@ -273,6 +273,11 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
             -name : String
         }
 
+        class "<<Domain Event>>\nCategoryUpdated\n//consumed from Admin//" as EvCatUpdated {
+            -categoryId : UUID
+            -name : String
+        }
+
         class "<<Domain Event>>\nCategoryDeleted\n//consumed from Admin//" as EvCatDeleted {
             -categoryId : UUID
         }
@@ -334,6 +339,14 @@ note right of Listing
     auction has zero bids.
     //See README S4: "Edit listing only//
     //if zero bids."//
+    **⚠ Cross-aggregate invariant:** Listing
+    cannot check Auction's bid count itself
+    (separate aggregates). Enforced at the
+    **Application Service layer**: load both
+    Auction and Listing, verify
+    auction.bidCount() == 0, then call
+    listing.update(). Standard DDD pattern
+    for invariants spanning aggregates.
 
     **INV-L3:** At least one photo required.
     //Per FR-AU01, US-AU01.//
@@ -355,32 +368,37 @@ note right of Auction
     greater than currentPrice.
     //Enforced by: placeBid() — FR-AU02//
 
-    **INV-A2:** Buy Now only when status = ACTIVE
+    **INV-A2:** Bids only accepted when
+    status = ACTIVE.
+    //Enforced by: placeBid() — US-AU02://
+    //"System rejects bids on non-ACTIVE."//
+
+    **INV-A3:** Buy Now only when status = ACTIVE
     AND buyNowPrice is set AND buyer ≠ seller.
     //Enforced by: buyNow() — FR-AU03//
 
-    **INV-A3:** Cancel only when status = ACTIVE
+    **INV-A4:** Cancel only when status = ACTIVE
     AND bidCount() = 0.
     //Enforced by: cancel() — FR-AU04//
 
-    **INV-A4:** On close():
+    **INV-A5:** On close():
     if highestBid().amount >= reservePrice → SOLD
     else → ENDED.
     //Enforced by: close() — FR-AU05//
 
-    **INV-A5:** Concurrent bid protection via
+    **INV-A6:** Concurrent bid protection via
     optimistic locking (@Version field).
     //Prevents race conditions — NF11, NF13//
 
-    **INV-A6:** Bidder must not be BANNED or
+    **INV-A7:** Bidder must not be BANNED or
     SUSPENDED. Validated via BidValidationService
     ACL call to Account context.
 
-    **INV-A7:** Seller cannot bid on own auction.
+    **INV-A8:** Seller cannot bid on own auction.
     bidderId ≠ sellerId.
     //Enforced by: placeBid()//
 
-    **INV-A8:** currentPrice always equals
+    **INV-A9:** currentPrice always equals
     max(bid.amount) or startingPrice if no bids.
     //Updated atomically by placeBid()//
 
@@ -456,6 +474,16 @@ note bottom of EvPayFail
     → SOLD → ENDED.
     Order is also cancelled.
     Per Saga pattern (Section 3.2).
+end note
+
+note bottom of EvCatCreated
+    **Category Event Handlers:**
+    CategoryCreated → add to local
+    CategoryRef cache.
+    CategoryUpdated → update name in cache.
+    CategoryDeleted → mark inactive in cache.
+    Listing.categoryId validated against
+    this cache (INV-L1).
 end note
 
 note bottom of Money
