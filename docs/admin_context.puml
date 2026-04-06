@@ -208,14 +208,6 @@ package "<<BoundedContext>>\nAdmin Context" as AdminBC #F5F5F5 {
             -occurredAt : DateTime
         }
 
-        class "<<Domain Event>>\nUserModerated" as EvUserModerated {
-            -userId : UUID
-            -adminId : UUID
-            -actionType : ActionType
-            -reason : String
-            -occurredAt : DateTime
-        }
-
         class "<<Domain Event>>\nCategoryCreated" as EvCatCreated {
             -categoryId : UUID
             -name : String
@@ -282,7 +274,6 @@ package "<<BoundedContext>>\nAdmin Context" as AdminBC #F5F5F5 {
 
     ' Event publishing
     ModService ..> EvListingRemoved : publishes
-    ModService ..> EvUserModerated : publishes
     ModService ..> EvReportResolved : publishes
     CatService ..> EvCatCreated : publishes
     CatService ..> EvCatUpdated : publishes
@@ -381,9 +372,10 @@ note bottom of ModService
     → Catalogue ctx deactivates listing
 
     moderateUser():
-    1. Creates ModerationAction (audit)
-    2. Publishes UserModerated
-    → Account ctx changes user status
+    1. Calls Account context REST API
+       to suspend/ban user (Customer-Supplier)
+    2. Account publishes UserStatusChanged
+    3. Creates ModerationAction (audit)
     See US-AD03, US-AD06.
 end note
 
@@ -399,7 +391,7 @@ package "<<BoundedContext>>\nAuction Context (external)" as AuctionExt #E8E8E8 {
 package "<<BoundedContext>>\nCatalogue Context (external)" as CatExt #E8E8E8 {
 }
 
-AdminBC .[#0277BD,dashed].> AccountExt : "<<Customer-Supplier>>\nREST: read/search users\n(ACL: User → UserSnapshot)"
+AdminBC .[#0277BD,dashed].> AccountExt : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
 AdminBC .[#0277BD,dashed].> AuctionExt : "<<Customer-Supplier>>\nREST: read auction details\n(ACL → ListingSnapshot)"
 AdminBC .[#0277BD,dashed].> CatExt : "<<Customer-Supplier>>\nREST: check active listings\nfor category deletion (INV-2)"
 
