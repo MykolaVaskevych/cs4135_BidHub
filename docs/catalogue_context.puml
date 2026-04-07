@@ -1,0 +1,204 @@
+@startuml
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Catalogue Context**\nDDD Tactical Design (UML Profile per Rademacher et al.)\nOwner: Zihan
+
+package "<<BoundedContext>>\nCatalogue Context" as CatalogueBC #F5F5F5 {
+
+    class "<<Aggregate Root, Entity>>\nCategory" as Category {
+        <<DefinesIdentity>> -categoryId : UUID
+        -name : String
+        -parentId : UUID
+        -depth : Integer
+        -slug : String
+        -isActive : Boolean
+        __
+        +create(name : String, parent : Category) : Category
+        +rename(name : String) : void
+        +deactivate() : void
+        +getPath() : CategoryPath
+    }
+
+    class "<<Aggregate Root, Entity>>\nListingSnapshot" as Snapshot {
+        <<DefinesIdentity>> -listingId : UUID
+        -title : String
+        -categoryId : UUID
+        -sellerId : UUID
+        -currentPrice : Money
+        -status : ListingStatus
+        -endTime : DateTime
+        __
+        +updateFromEvent(event : ListingPublished) : void
+        +markRemoved() : void
+        +isSearchable() : Boolean
+    }
+
+    class "<<Value Object>>\nCategoryPath" as CategoryPath {
+        -segments : List<String>
+        -fullPath : String
+        __
+        +toString() : String
+    }
+
+    class "<<Value Object>>\nSearchQuery" as SearchQuery {
+        -keyword : String
+        -categoryId : UUID
+        -minPrice : BigDecimal
+        -maxPrice : BigDecimal
+        -page : Integer
+        __
+        +isValid() : Boolean
+    }
+
+    class "<<Value Object>>\nMoney" as Money {
+        -amount : BigDecimal
+        -currency : String
+        __
+        +isGreaterThan(other : Money) : Boolean
+    }
+
+    enum "<<Enumeration>>\nListingStatus" as ListingStatus {
+        ACTIVE
+        SOLD
+        ENDED
+        REMOVED
+        CANCELLED
+    }
+
+    class "<<Repository>>\nCategoryRepository" as CategoryRepo {
+        +findById(id : UUID) : Category
+        +findAll() : List<Category>
+        +findChildren(parentId : UUID) : List<Category>
+        +save(category : Category) : Category
+        +existsByNameAndParent(name : String, parentId : UUID) : Boolean
+    }
+
+    class "<<Repository>>\nListingSnapshotRepository" as SnapshotRepo {
+        +findById(listingId : UUID) : ListingSnapshot
+        +search(query : SearchQuery) : Page<ListingSnapshot>
+        +findByCategory(categoryId : UUID) : List<ListingSnapshot>
+        +save(snapshot : ListingSnapshot) : ListingSnapshot
+        +deleteByListingId(listingId : UUID) : void
+    }
+
+    class "<<Service>>\nSearchService" as SearchService {
+        +search(query : SearchQuery) : Page<ListingSnapshot>
+    }
+
+    class "<<Service>>\nCategoryTreeService" as CategoryTreeService {
+        +buildTree() : List<Category>
+        +getPath(categoryId : UUID) : CategoryPath
+    }
+
+    class "<<Service>>\nEventHandlerService" as EventHandler {
+        +handleListingPublished(event : ListingPublished) : void
+        +handleListingRemoved(event : ListingRemoved) : void
+        +handleCategoryUpdated(event : CategoryUpdated) : void
+    }
+
+    class "<<Domain Event>>\nListingPublished" as EvListingPublished {
+        -listingId : UUID
+        -title : String
+        -categoryId : UUID
+        -startingPrice : BigDecimal
+        -endTime : DateTime
+        -occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nListingRemoved" as EvListingRemoved {
+        -listingId : UUID
+        -reason : String
+        -occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nCategoryUpdated" as EvCategoryUpdated {
+        -categoryId : UUID
+        -name : String
+        -parentId : UUID
+        -occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nCategoryDeleted" as EvCategoryDeleted {
+        -categoryId : UUID
+        -occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nListingRecategorized" as EvRecategorized {
+        -listingId : UUID
+        -oldCategoryId : UUID
+        -newCategoryId : UUID
+        -occurredAt : DateTime
+    }
+
+    Category "1" *-- "1" CategoryPath : has >
+    Snapshot "1" *-- "1" Money : currentPrice >
+    Snapshot --> ListingStatus : status
+
+    CategoryRepo ..> Category : retrieves / persists
+    SnapshotRepo ..> Snapshot : retrieves / persists
+
+    SearchService ..> SnapshotRepo : uses
+    SearchService ..> SearchQuery : accepts
+    CategoryTreeService ..> CategoryRepo : uses
+    EventHandler ..> SnapshotRepo : updates
+    EventHandler ..> EvListingPublished : handles
+    EventHandler ..> EvListingRemoved : handles
+    EventHandler ..> EvCategoryUpdated : handles
+    CategoryTreeService ..> EvCategoryDeleted : publishes
+    EventHandler ..> EvRecategorized : publishes
+}
+
+note right of Category
+    **Aggregate Invariants:**
+    INV-C1: name unique under same parent
+    INV-C2: depth cannot exceed 3
+    INV-C3: name cannot be empty
+    INV-C4: cannot delete if listings exist
+end note
+
+note right of Snapshot
+    **Aggregate Invariants:**
+    INV-S1: updated only via domain events
+    INV-S2: search returns ACTIVE only
+    INV-S3: listingId is immutable
+    INV-S4: currentPrice must be > 0
+end note
+
+note bottom of EventHandler
+    **Anti-Corruption Layer (ACL):**
+    Translates Auction context events into
+    Catalogue's own ListingSnapshot model.
+    Never imports Auction's internal classes.
+    Idempotency enforced by listingId check.
+end note
+
+note bottom of SearchService
+    **REST API (Published by Catalogue):**
+    GET /api/catalogue/search?q=&category=&minPrice=&maxPrice=
+    GET /api/catalogue/categories
+    GET /api/catalogue/categories/{id}/listings
+    POST /api/catalogue/categories (Admin only)
+end note
+
+package "<<BoundedContext>>\nAuction Context (external)" as AuctionExt #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nAdmin Context (external)" as AdminExt #E8E8E8 {
+}
+
+CatalogueBC .[#616161,dashed].> AuctionExt : "Events: ListingPublished, ListingRemoved\n(ACL: event payload -> ListingSnapshot)"
+CatalogueBC .[#616161,dashed].> AdminExt : "Events: CategoryUpdated\nREST: POST /categories"
+@enduml
