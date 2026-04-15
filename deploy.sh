@@ -1,41 +1,34 @@
 #!/bin/bash
-# BidHub Railway deploy script — run from repo root (cs4135_BidHub/)
+# BidHub deploy script — run from repo root (cs4135_BidHub/)
+# Usage:
+#   ./deploy.sh                          → deploy all services
+#   ./deploy.sh frontend                 → deploy frontend only
+#   ./deploy.sh notification-service delivery-service  → specific services
 set -e
 
-echo "==> Merging backend: development → main..."
-cd backend
-git checkout main
-git merge --ff-only origin/development
-git push origin main
-git checkout development
-cd ..
+ALL_SERVICES=(
+  account-service
+  auction-service
+  admin-service
+  api-gateway
+  notification-service
+  delivery-service
+  frontend
+)
 
-echo "==> Merging frontend: development → main..."
-cd frontend
-git checkout main
-git merge --ff-only origin/development
-git push origin main
-git checkout development
-cd ..
+TARGETS=("${@:-${ALL_SERVICES[@]}}")
 
-echo "==> Pinning submodule SHAs in root/main..."
-git checkout main
-git submodule update --remote --merge
-SHA_B=$(git -C backend rev-parse --short HEAD)
-SHA_F=$(git -C frontend rev-parse --short HEAD)
-git add backend frontend
-git commit -m "pin backend@${SHA_B} frontend@${SHA_F}"
-git push origin main
-git checkout development
+echo "==> Deploying to Railway from $(pwd)"
+echo "    Services: ${TARGETS[*]}"
+echo ""
 
-echo "==> Deploying backend services to Railway..."
-for svc in account-service auction-service admin-service api-gateway \
-           notification-service delivery-service; do
-  echo "  deploying $svc..."
+for svc in "${TARGETS[@]}"; do
+  echo "  → $svc"
   railway up --service "$svc" --detach
 done
 
-echo "==> Deploying frontend to Railway..."
-railway up --service "frontend" --detach
-
-echo "==> Done. Live at https://api-gateway-production-d819.up.railway.app"
+echo ""
+echo "==> All builds queued. Check status:"
+echo "    railway deployment list --service <name>"
+echo "    Frontend: https://frontend-production-cff8.up.railway.app"
+echo "    API:      https://api-gateway-production-d819.up.railway.app"
