@@ -176,6 +176,10 @@ git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_BidHub.git
 
 # Or if already cloned without submodules
 git submodule update --init --recursive
+
+# Pull latest changes (run from repo root)
+git pull origin development
+git submodule update --remote --merge
 ```
 
 ## Peer Review Quick Start
@@ -184,9 +188,7 @@ If you are reviewing this project, follow these steps to run the full stack loca
 
 ### Prerequisites
 
-- **Java 21** — [Eclipse Temurin](https://adoptium.net/) recommended
-- **Docker Desktop** — required for PostgreSQL and all backend services
-- **Node.js 22** — required for frontend dev mode
+- **Docker** — all services including the frontend run in containers
 - **Git** — with submodule support
 
 ### Step 1: Clone
@@ -196,30 +198,21 @@ git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_BidHub.git
 cd cs4135_BidHub
 ```
 
-### Step 2: Start backend (all services + database)
+### Step 2: Start everything
+
+Run from the **repo root** (`cs4135_BidHub/`):
 
 ```bash
-cd backend
 docker compose up --build
 ```
 
-First build takes ~5 minutes (Maven downloads + Docker images). After that, all 11 services + PostgreSQL will be running.
+First build takes ~5 minutes (Maven downloads + Docker images). After that, all services including the frontend are running.
 
-### Step 3: Start frontend
-
-Open a **new terminal**:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Step 4: Open in browser
+### Step 3: Open in browser
 
 | What | URL |
 |------|-----|
-| **Frontend** | http://localhost:5173 |
+| **Frontend** | http://localhost |
 | **API Gateway** | http://localhost:8080 |
 | **Eureka Dashboard** | http://localhost:8761 |
 | **Swagger UI (Auction)** | http://localhost:8083/swagger-ui/index.html |
@@ -239,12 +232,12 @@ To create a buyer or seller account, use the **Register** page on the frontend. 
 
 ```bash
 # Register a test user
-curl -X POST http://localhost:8080/api/auth/register \
+curl -X POST http://localhost/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"reviewer@test.com","password":"Review1!","firstName":"Peer","lastName":"Reviewer","role":"BUYER"}'
 
 # Login (returns JWT)
-curl -X POST http://localhost:8080/api/auth/login \
+curl -X POST http://localhost/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"reviewer@test.com","password":"Review1!"}'
 ```
@@ -276,32 +269,20 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 ### Full stack (Docker)
 
+Run from the **repo root** (`cs4135_BidHub/`):
+
 ```bash
-cd backend
 docker compose up --build
-# All 10 services + Postgres. First build takes ~5 min.
-# API gateway: http://localhost:8080
-# Eureka dashboard: http://localhost:8761
+# All services + frontend + Postgres. First build takes ~5 min.
+# Frontend:      http://localhost
+# API gateway:   http://localhost:8080
+# Eureka:        http://localhost:8761
 ```
 
-### Frontend only (dev mode)
+If you already have the images built:
 
 ```bash
-cd frontend
-npm install
-npm run dev
-# http://localhost:5173 — expects backend running on :8080
-```
-
-### Backend services individually
-
-```bash
-cd backend
-# Start infra first
-./mvnw -pl eureka-server spring-boot:run &
-./mvnw -pl config-server spring-boot:run &
-# Then any service
-./mvnw -pl account-service spring-boot:run
+docker compose up
 ```
 
 ## Pre-commit Hooks
