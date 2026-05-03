@@ -184,12 +184,27 @@ git submodule update --remote --merge
 
 ## Peer Review Quick Start
 
-If you are reviewing this project, follow these steps to run the full stack locally.
+If you are reviewing this project, follow these steps to run the full stack locally. The
+**root `docker-compose.yml`** is the single canonical entry point for the full stack
+(backend services + frontend). The file in `backend/docker-compose.yml` brings up only the
+backend; see [`backend/docs/DEPLOY.md`](backend/docs/DEPLOY.md) for that workflow.
 
 ### Prerequisites
 
-- **Docker** — all services including the frontend run in containers
-- **Git** — with submodule support
+- **Supported host:** Linux, macOS, or Windows with WSL2. Native Windows is not a deploy
+  target — Docker Desktop on Windows runs the same Linux engine via WSL2 anyway.
+- **Docker Desktop / Docker Engine** running. Verify with `docker info`; if it errors, start
+  Docker before continuing.
+- **Git 2.13+** with submodule support.
+- **~6 GB free RAM** for the full stack (10 backend services + Postgres + frontend).
+- **Free host ports:** 80 (frontend), 8080 (gateway), 8761 (Eureka), 8888 (config-server).
+
+If `git` reports *dubious ownership* on a submodule directory, copy the path from the error
+message and add it explicitly:
+
+```bash
+git config --global --add safe.directory /path/from/error/message
+```
 
 ### Step 1: Clone
 
@@ -198,7 +213,25 @@ git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_BidHub.git
 cd cs4135_BidHub
 ```
 
-### Step 2: Start everything
+If you forgot `--recurse-submodules`:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Step 2: Configure secrets
+
+Copy the example env file and fill in real values:
+
+```bash
+cp .env.example .env
+# Edit .env: set JWT_SECRET, POSTGRES_PASSWORD, INTERNAL_API_TOKEN, RABBITMQ_PASS to strong random values
+```
+
+Compose will refuse to start if any required variable is missing — this is intentional, the
+defaults that used to be embedded in `docker-compose.yml` have been removed.
+
+### Step 3: Start everything
 
 Run from the **repo root** (`cs4135_BidHub/`):
 
@@ -206,17 +239,22 @@ Run from the **repo root** (`cs4135_BidHub/`):
 docker compose up --build
 ```
 
-First build takes ~5 minutes (Maven downloads + Docker images). After that, all services including the frontend are running.
+First build takes ~5 minutes (Maven downloads + Docker images). After that, run
+`docker compose ps` to confirm every service reports `(healthy)`. The api-gateway and
+frontend will only become reachable once their `depends_on` chain has all gone healthy.
 
-### Step 3: Open in browser
+### Step 4: Open in browser
 
 | What | URL |
 |------|-----|
 | **Frontend** | http://localhost |
 | **API Gateway** | http://localhost:8080 |
 | **Eureka Dashboard** | http://localhost:8761 |
-| **Swagger UI (Auction)** | http://localhost:8083/swagger-ui/index.html |
-| **Swagger UI (Admin)** | http://localhost:8087/swagger-ui/index.html |
+
+> Business services (account, auction, order, payment, etc.) are no longer published on host
+> ports by default. They are reachable only through the gateway, or from inside the
+> `bidhub-*` Docker network. To run a one-off Swagger probe against, say, auction-service:
+> `docker compose exec auction-service wget -qO- http://localhost:8083/swagger-ui/index.html`.
 
 ### Test accounts
 
@@ -244,23 +282,33 @@ curl -X POST http://localhost/api/auth/login \
 
 ### Services overview
 
-| Service | Port | Description |
-|---------|------|-------------|
-| eureka-server | 8761 | Service discovery (Spring Cloud Netflix) |
-| config-server | 8888 | Centralised configuration (Spring Cloud Config) |
-| api-gateway | 8080 | Edge routing + JWT validation (Spring Cloud Gateway) |
-| account-service | 8081 | Auth, profile, addresses, admin user management |
-| catalog-service | 8082 | Search, categories, active-count |
-| auction-service | 8083 | Listings, auctions, bids, watchlist |
-| order-service | 8084 | Order lifecycle |
-| payment-service | 8085 | Wallet, top-up, deduct, transactions |
-| notification-service | 8086 | Send, list, templates |
-| admin-service | 8087 | Categories, reports, moderation, dashboard |
-| delivery-service | 8088 | Delivery job lifecycle |
+| Service | Port | Host-reachable | Description |
+|---------|------|----------------|-------------|
+| eureka-server | 8761 | yes (`localhost:8761`) | Service discovery (Spring Cloud Netflix) |
+| config-server | 8888 | yes (`localhost:8888`) | Centralised configuration (Spring Cloud Config) |
+| api-gateway | 8080 | yes (`localhost:8080`) | Edge routing + JWT validation (Spring Cloud Gateway) |
+| frontend | 80 | yes (`localhost`) | React SPA (nginx proxies `/api/` to gateway) |
+| rabbitmq | 5672 / 15672 | mgmt UI yes (`localhost:15672`), AMQP no | Settlement-saga broker (containers + dependencies provisioned; no event flows wired yet) |
+| account-service | 8081 | no (Docker network only) | Auth, profile, addresses, admin user management |
+| catalog-service | 8082 | no | Search, categories, active-count |
+| auction-service | 8083 | no | Listings, auctions, bids, watchlist |
+| order-service | 8084 | no | Order lifecycle |
+| payment-service | 8085 | no | Wallet, top-up, deduct, transactions |
+| notification-service | 8086 | no | Send, list, templates |
+| admin-service | 8087 | no | Categories, reports, moderation, dashboard |
+| delivery-service | 8088 | no | Delivery job lifecycle |
+| postgres | 5432 | no | Shared database |
+
+**Trust boundary.** The api-gateway terminates browser traffic, validates the JWT, and attaches
+two headers to every proxied request: `X-User-Id` (the authenticated user) and
+`X-Internal-Token` (the shared service-to-service secret from `.env`). Account-service
+rejects any request that does not carry a matching `X-Internal-Token`. Other backend services
+currently rely on Docker network isolation alone; extending the same filter to the rest is
+tracked separately as P1 work.
 
 ### Known limitations
 
-- **No message broker** — services communicate via REST only; async domain events are not yet implemented.
+- **RabbitMQ infrastructure is provisioned** (broker container + Spring AMQP dependency on the four settlement-saga services), but **no business event flows have been wired yet** — settlement, catalogue projection, and async notifications still run synchronously over REST. Subsequent PRs land the choreography described in `docs/runtime_view_2_async.puml`.
 - **catalog-service** is a read-projection — no data is indexed from Auction events yet; search returns empty unless seeded manually.
 
 ---

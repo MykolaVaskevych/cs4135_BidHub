@@ -8,3 +8,7 @@ jmeter.log
 # Accidental npm artifacts at repo root (frontend has its own)
 /package-lock.json
 /node_modules/
+
+# Local environment overrides — copy from .env.example
+.env
+.env.local
