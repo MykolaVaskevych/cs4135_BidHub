@@ -131,6 +131,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/bidhub_auction
       DB_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?Set INTERNAL_API_TOKEN in .env}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
@@ -279,6 +280,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/bidhub_admin
       DB_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?Set INTERNAL_API_TOKEN in .env}
     expose:
       - "8087"
     depends_on:
